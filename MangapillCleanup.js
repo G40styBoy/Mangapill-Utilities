@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Mangapill Cleanup
 // @namespace    https://github.com/G40styBoy
-// @version      2.2
+// @version      2.3
 // @description  Removes ads and clutter across mangapill.com. Clean reader on chapter pages, tidy homepage.
 // @author       G40sty
 // @match        *://*.mangapill.com/*
@@ -62,8 +62,12 @@
       div.lg\\:container { max-width: none !important; width: 100% !important; padding: 0 !important; margin: 0 !important; }
       chapter-page > div.border { border: 0 !important; border-radius: 0 !important; background: transparent !important; }
       chapter-page div.bg-card { background: transparent !important; }
-      ${C.pageWidth ? `chapter-page picture, chapter-page img.js-page { width: ${C.pageWidth} !important; max-width: 100% !important; height: auto !important; }` : ''}
     `;
+    if (C.pageWidth) {
+      // Built with plain string joining on purpose: simple phone editors choke on a template inside a template
+      css += 'chapter-page picture, chapter-page img.js-page { width: ' + C.pageWidth +
+             ' !important; max-width: 100% !important; height: auto !important; }';
+    }
   }
 
   // Homepage only
