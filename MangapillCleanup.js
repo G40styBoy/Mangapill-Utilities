@@ -7,7 +7,7 @@
 // @match        *://*.mangapill.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=mangapill.com
 // @grant        none
-// @run-at       document-start
+// @run-at       document-end
 // ==/UserScript==
 
 (function () {
