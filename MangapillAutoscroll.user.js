@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Mangapill Autoscroll
 // @namespace    https://github.com/G40styBoy
-// @version      2.0
+// @version      1.0
 // @description  S starts/stops. = and - change speed. Moves on to the next chapter by itself.
 // @author       G40sty
 // @match        *://*.mangapill.com/chapters/*/*
