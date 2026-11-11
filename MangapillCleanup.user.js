@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Mangapill Cleanup
 // @namespace    https://github.com/G40styBoy
-// @version      2.4
+// @version      1.0
 // @description  Removes ads and clutter across mangapill.com. Clean reader on chapter pages, tidy homepage.
 // @author       G40sty
 // @match        *://*.mangapill.com/*
