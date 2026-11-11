@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Mangapill Autoscroll
 // @namespace    https://github.com/G40styBoy
-// @version      1.0
+// @version      1.1
 // @description  S starts/stops. = and - change speed. Moves on to the next chapter by itself.
 // @author       G40sty
 // @match        *://*.mangapill.com/chapters/*/*
@@ -18,16 +18,21 @@
   const MIN_SPEED = 0.5;
   const MAX_SPEED = 20;
   const AUTO_ADVANCE = true;   // go to the next chapter when this one ends
-  const END_WAIT_FRAMES = 90;  // about 1.5 seconds at the bottom before moving on
-  const GIVE_UP_FRAMES = 900;  // about 15 seconds. Give up if images never finish loading.
+  const END_WAIT_MS = 1500;    // time spent at the bottom before moving on
+  const GIVE_UP_MS = 15000;    // give up if images never finish loading
+  const CHECK_EVERY_MS = 100;  // how often to look at the bottom of the page
+  const PX_PER_SECOND = 60;    // speed 1 = 60 pixels a second, so speeds feel the same on any screen
   const KEY = 'mpAutoscrollNext';
 
   let speed = GM_getValue('speed', 2);
   let running = false;
-  let y = 0;
-  let lastSet = 0;
+  let y = 0;               // our own position, so slow speeds do not get rounded away
+  let lastSet = 0;         // the last position we asked for
+  let lastFrame = 0;
+  let lastCheck = 0;
+  let bottomMs = 0;
   let rafId = null;
-  let bottomFrames = 0;
+  let resync = false;      // set when you scroll by hand, so we pick up from where you are
   let resumeTimer = null;
 
   const badge = document.createElement('div');
@@ -48,21 +53,44 @@
   const nextLink = () => document.querySelector('a[data-hotkey="ArrowRight"][href]');
   const allPagesLoaded = () => document.querySelectorAll('.js-page:not(.loaded)').length === 0;
 
-  function tick() {
-    // If you scrolled by hand (wheel, scrollbar, keys), pick up from there
-    if (Math.abs(window.scrollY - lastSet) > 2) y = window.scrollY;
+  // Round to a whole screen pixel. On screens with scaling (125%, 150%) this keeps every step even.
+  function pixelAlign(value) {
+    const dpr = window.devicePixelRatio || 1;
+    return Math.round(value * dpr) / dpr;
+  }
 
-    y += speed;
-    window.scrollTo(0, y);
-    lastSet = window.scrollY;
+  // If the site turns on smooth scrolling, every small step would restart an animation and look jerky
+  function smoothOff(off) {
+    const root = document.documentElement;
+    if (off) root.style.setProperty('scroll-behavior', 'auto', 'important');
+    else root.style.removeProperty('scroll-behavior');
+  }
 
-    const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
-    bottomFrames = atBottom ? bottomFrames + 1 : 0;
-    if (atBottom) y = window.scrollY;
+  function tick(now) {
+    if (!running) return;
 
-    // Only move on once every page image has loaded, so a slow image never ends the chapter early
-    if (bottomFrames > END_WAIT_FRAMES && allPagesLoaded()) { finish(); return; }
-    if (bottomFrames > GIVE_UP_FRAMES) { stop('Gave up: images did not load'); return; }
+    // Move by elapsed time, not by frame count, so 60 Hz and 144 Hz screens scroll at the same speed
+    // and a slow frame does not cause a visible hitch. Capped so a long pause never makes a big jump.
+    const dt = Math.min(now - lastFrame, 100);
+    lastFrame = now;
+
+    if (resync) { y = window.scrollY; resync = false; }
+
+    y += speed * PX_PER_SECOND * dt / 1000;
+    lastSet = pixelAlign(y);
+    window.scrollTo(0, lastSet);
+
+    // Reading the page height is costly, so do it a few times a second instead of every frame
+    const sinceCheck = now - lastCheck;
+    if (sinceCheck >= CHECK_EVERY_MS) {
+      lastCheck = now;
+      const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      if (atBottom) { y = window.scrollY; bottomMs += sinceCheck; } else { bottomMs = 0; }
+
+      // Only move on once every page image has loaded, so a slow image never ends the chapter early
+      if (bottomMs > END_WAIT_MS && allPagesLoaded()) { finish(); return; }
+      if (bottomMs > GIVE_UP_MS) { stop('Gave up: images did not load'); return; }
+    }
 
     rafId = requestAnimationFrame(tick);
   }
@@ -72,6 +100,7 @@
     if (AUTO_ADVANCE && next) {
       cancelAnimationFrame(rafId);
       running = false;
+      smoothOff(false);
       try { sessionStorage.setItem(KEY, String(Date.now())); } catch (e) {}
       showBadge('Next chapter...');
       location.href = next.href;
@@ -82,8 +111,12 @@
 
   function start() {
     running = true;
-    y = lastSet = window.scrollY;
-    bottomFrames = 0;
+    y = window.scrollY;
+    lastSet = y;
+    bottomMs = 0;
+    resync = false;
+    lastFrame = lastCheck = performance.now();
+    smoothOff(true);
     rafId = requestAnimationFrame(tick);
     showBadge();
   }
@@ -91,6 +124,7 @@
   function stop(message) {
     running = false;
     cancelAnimationFrame(rafId);
+    smoothOff(false);
     showBadge(message);
   }
 
@@ -99,6 +133,11 @@
     GM_setValue('speed', speed);
     showBadge();
   }
+
+  // You scrolled by hand (wheel, scrollbar, keys)? Pick up from where you are.
+  window.addEventListener('scroll', () => {
+    if (running && Math.abs(window.scrollY - lastSet) > 2) resync = true;
+  }, { passive: true });
 
   window.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
